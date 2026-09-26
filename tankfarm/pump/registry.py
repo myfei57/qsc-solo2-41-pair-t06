@@ -40,6 +40,9 @@ class PumpRegistry:
             raise UnknownPumpError(pump_id)
         return pump
 
+    def find(self, pump_id: str) -> Pump | None:
+        return self._pumps.get(pump_id)
+
     def all(self) -> tuple[Pump, ...]:
         return tuple(self._pumps.values())
 

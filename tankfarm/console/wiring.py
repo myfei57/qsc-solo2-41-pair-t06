@@ -604,6 +604,7 @@ class Services:
         self.machine.reset()
         self.engine.reset()
         self.header.restore(0.0)
+        self.arbiter.reset()
         self.inlet.apply_open(False)
         self.batches.restore({})
 
@@ -615,6 +616,7 @@ class Services:
             dict(self.projection.valve_positions), dict(self.projection.valve_ts)
         )
         self.header.restore(self.projection.header_setpoint)
+        self._replay_header_history()
         self.pumps.apply_running(dict(self.projection.pump_running))
         policy = ExpiryPolicy(self.settings.baseline_max_age)
         for tank_id in self.levels.tank_ids():
@@ -651,6 +653,21 @@ class Services:
             self.engine.restore(name, active, self.projection.latch_reason.get(name, ""))
         self.batches.restore(dict(self.projection.batches))
         self.machine.restore(self.projection.stage)
+
+    def _replay_header_history(self) -> None:
+        """Rebuilds the header trace and every pump's last demand."""
+
+        for record in self.visible_records():
+            if record.kind != topics.HEADER_SETPOINT:
+                continue
+            value = float(record.payload["setpoint"])
+            self.header.replay_write(value, record.ts)
+            pump_id = record.payload.get("pump_id")
+            if isinstance(pump_id, str) and pump_id:
+                self.arbiter.restore_demand(pump_id, value)
+                pump = self.pumps.find(pump_id)
+                if pump is not None:
+                    pump.setpoint = value
 
 
 def build_services(
